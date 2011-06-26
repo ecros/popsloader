@@ -69,7 +69,7 @@ static u8 g_keys[16];
 u32 psp_fw_version = 0;
 u32 psp_model = 0;
 
-static int myIoRead(int fd, u8 *buf, int size)
+int myIoRead(int fd, u8 *buf, int size)
 {
 	int ret;
 	u32 pos;
@@ -148,7 +148,7 @@ exit:
 	return ret;
 }
 
-static int myIoReadAsync(int fd, u8 *buf, int size)
+int myIoReadAsync(int fd, u8 *buf, int size)
 {
 	int ret;
 	u32 pos;
@@ -163,7 +163,7 @@ static int myIoReadAsync(int fd, u8 *buf, int size)
 	return ret;
 }
 
-static SceOff myIoLseek(SceUID fd, SceOff offset, int whence)
+SceOff myIoLseek(SceUID fd, SceOff offset, int whence)
 {
 	SceOff ret;
 	u32 k1;
@@ -190,7 +190,7 @@ static SceOff myIoLseek(SceUID fd, SceOff offset, int whence)
 	return ret;
 }
 
-static int myIoClose(SceUID fd)
+int myIoClose(SceUID fd)
 {
 	int ret;
 	u32 k1;
@@ -324,7 +324,7 @@ static int sceIoOpenPlain(const char *file, int flag, int mode)
 	return ret;
 }
 
-static int myIoOpen(const char *file, int flag, int mode)
+int myIoOpen(const char *file, int flag, int mode)
 {
 	int ret;
 
@@ -347,7 +347,7 @@ static int myIoOpen(const char *file, int flag, int mode)
 	return ret;
 }
 
-static int myIoIoctl(SceUID fd, unsigned int cmd, void * indata, int inlen, void * outdata, int outlen)
+int myIoIoctl(SceUID fd, unsigned int cmd, void * indata, int inlen, void * outdata, int outlen)
 {
 	int ret;
 
@@ -388,7 +388,7 @@ exit:
 	return ret;
 }
 
-static int myIoGetstat(const char *path, SceIoStat *stat)
+int myIoGetstat(const char *path, SceIoStat *stat)
 {
 	int ret;
 
@@ -841,6 +841,7 @@ static int popcorn_patch_chain(SceModule2 *mod)
 
 	if (0 == strcmp(mod->modname, "pops")) {
 		u32 text_addr = mod->text_addr;
+		int i;
 
 		printk("%s: patching pops\n", __func__);
 
@@ -856,10 +857,14 @@ static int popcorn_patch_chain(SceModule2 *mod)
 		hook_import_bynid((SceModule*)mod, "sceMeAudio", g_offs->pops_patch.sceMeAudio_67CD7972_NID, _sceMeAudio_67CD7972, 1);
 		_sw(0x24020001, text_addr + g_offs->pops_patch.manualNameCheck[psp_model]);
 
+		for(i=0; i<NELEMS(g_io_hooks); ++i) {
+			hook_import_bynid((SceModule*)mod, "IoFileMgrForUser", g_io_hooks[i].nid, g_io_hooks[i].fp, 1);
+		}
+
 		sync_cache();
 	}
 
-	if( conf.noanalog ) {
+	if(conf.noanalog) {
 		patch_analog_imports((SceModule*)mod);
 	}
 

@@ -18,7 +18,7 @@
 #include <pspsdk.h>
 #include "popcorn_patch_offset.h"
 
-#if !defined(CONFIG_635) && !defined(CONFIG_620) && !defined(CONFIG_639) && !defined(CONFIG_610) && !defined(CONFIG_600) && !defined(CONFIG_550) && !defined(CONFIG_500)
+#if !defined(CONFIG_635) && !defined(CONFIG_620) && !defined(CONFIG_639) && !defined(CONFIG_610) && !defined(CONFIG_600) && !defined(CONFIG_550) && !defined(CONFIG_500) && !defined(CONFIG_400)
 #error You have to define one of CONFIG_FW_VERSION
 #endif
 
@@ -372,6 +372,56 @@ PatchOffset g_500_offsets = {
 };
 #endif
 
+#ifdef CONFIG_400
+PatchOffset g_400_offsets = {
+	.fw_version = FW_400,
+	.popsman_patch = {
+		.get_rif_path = 0xDEADBEEF,
+		.get_rif_path_call1 = 0xDEADBEEF,
+		.get_rif_path_call2 = 0xDEADBEEF,
+		.sceNpDrmGetVersionKeyCall = 0xDEADBEEF,
+		.scePspNpDrm_driver_9A34AC9F_Call = 0x00000138,
+		.scePopsManLoadModuleCheck = 0x000015F0,
+	},
+	.pops_patch = {
+		.decomp = {
+			{ 0x000CC12C, 0x000119CC }, // 01G
+			{ 0x000CC12C, 0x000119CC }, // 02G
+			{ 0x000CC12C, 0x000119CC }, // 03G
+			{ 0x000CC12C, 0x000119CC }, // 04G
+			{ 0x000CC12C, 0x000119CC }, // 05G
+			{ 0x000CC12C, 0x000119CC }, // unused
+			{ 0x000CC12C, 0x000119CC }, // unused
+			{ 0x000CC12C, 0x000119CC }, // unused
+			{ 0x000CC12C, 0x000119CC }, // unused
+		},
+		.ICON0SizeOffset = {
+			0x0002CF88, // 01G
+			0x0002CF88, // 02G
+			0x0002CF88, // 03G
+			0x0002CF88, // 04G
+			0x0002CF88, // 05G
+			0x0002CF88, // unused
+			0x0002CF88, // unused
+			0x0002CF88, // unused
+			0x0002CF88, // unused
+		},
+		.manualNameCheck = {
+			0x0001C044, // 01G
+			0x0001C044, // 02G
+			0x0001C044, // 03G
+			0x0001C044, // 04G
+			0x0001C044, // 05G
+			0x0001C044, // unused
+			0x0001C044, // unused
+			0x0001C044, // unused
+			0x0001C044, // unused
+		},
+		.sceMeAudio_67CD7972_NID = 0xBCC74871,
+	},
+};
+#endif
+
 PatchOffset *g_offs = NULL;
 
 void setup_patch_offset_table(u32 fw_version)
@@ -415,6 +465,12 @@ void setup_patch_offset_table(u32 fw_version)
 #ifdef CONFIG_500
    	if(fw_version == g_500_offsets.fw_version) {
 		g_offs = &g_500_offsets;
+	}
+#endif
+
+#ifdef CONFIG_400
+   	if(fw_version == g_400_offsets.fw_version) {
+		g_offs = &g_400_offsets;
 	}
 #endif
 }

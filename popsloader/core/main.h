@@ -18,12 +18,14 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#if 0
 #ifdef DEBUG
 #define printk pspDebugScreenPrintf
 #define printk_init pspDebugScreenInit
 #else
 #define printk(...)
 #define printk_init(...)
+#endif
 #endif
 
 #define UNKNOWNNID 0xDEADBEEF
@@ -51,6 +53,8 @@ extern resolver_config nid_fix_500_to_635[];
 extern u32 nid_fix_500_to_635_size;
 extern resolver_config nid_fix_500_to_620[];
 extern u32 nid_fix_500_to_620_size;
+extern resolver_config nid_fix_400_to_620[];
+extern u32 nid_fix_400_to_620_size;
 
 void fix_nid(SceModule* mod);
 void setup_nid_resolver(void);

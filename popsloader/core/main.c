@@ -30,6 +30,7 @@
 #include "strsafe.h"
 #include "systemctrl.h"
 #include "main.h"
+#include "printk.h"
 
 struct ModuleList {
 	char *path;
@@ -116,6 +117,8 @@ static inline const char *get_module_prefix(void)
 		sprintf(buf, "%s%s%s/", is_ef0() ? "ef" : "ms", MODULE_PATH, "550");
 	} else if(pops_fw_version == FW_500) {
 		sprintf(buf, "%s%s%s/", is_ef0() ? "ef" : "ms", MODULE_PATH, "500");
+	} else if(pops_fw_version == FW_400) {
+		sprintf(buf, "%s%s%s/", is_ef0() ? "ef" : "ms", MODULE_PATH, "400");
 	} else {
 		printk("%s: Unknown version: 0x%08X\n", __func__, pops_fw_version);
 		asm("break");
@@ -144,7 +147,7 @@ static SceUID _sceKernelLoadModule(const char *path, int flags, SceKernelLMOptio
 			}
 
 			path = newpath;
-		} else if(pops_fw_version == FW_500 || pops_fw_version == FW_550) {
+		} else if(pops_fw_version <= FW_550) {
 			sprintf(newpath, "%spops.prx", get_module_prefix());
 			path = newpath;
 		} else {
@@ -191,9 +194,47 @@ int _sceImposeGetParamOld(int param)
 	}
 
 	ret = sceImposeGetParamNew(new_param);
-//	printk("%s: 0x%08X/0x%08X -> 0x%08X\n", __func__, param, new_param, ret);
+
+	if(ret < 0) {
+		printk("%s: 0x%08X/0x%08X -> 0x%08X\n", __func__, param, new_param, ret);
+	}
 
 	return ret;
+}
+
+static int load_start_module(const char *path)
+{
+	SceUID modid;
+	SceModule2 *mod;
+
+	modid = sceKernelLoadModule(path, 0, NULL);
+
+	if(modid < 0) {
+		printk("%s: %s load -> 0x%08X\n", __func__, path, modid);
+
+#ifdef DEBUG
+		sceKernelDelayThread(2000000);
+#endif
+
+		return modid;
+	}
+
+	mod = (SceModule2*) sceKernelFindModuleByUID(modid);
+
+	if(mod != NULL) {
+		fix_nid((SceModule2*)mod);
+	}
+
+	modid = sceKernelStartModule(modid, 0, 0, 0, 0);
+
+#ifdef DEBUG
+	if(modid < 0) {
+		printk("%s: %s start -> 0x%08X\n", __func__, path, modid);
+		sceKernelDelayThread(2000000);
+	}
+#endif
+
+	return modid;
 }
 
 static int replace_module(int modid, SceSize argsize, void *argp, int *modstatus, SceKernelSMOption *opt, char *modname, char *redir_path)
@@ -240,28 +281,50 @@ static int replace_module(int modid, SceSize argsize, void *argp, int *modstatus
 	}
 
 	mod = (SceModule2*) sceKernelFindModuleByUID(modid);
-	fix_nid((SceModule*)mod);
 
-	if(0 == strcmp(mod->modname, "PROPopcornManager")) {
-		modid = sceKernelStartModule(modid, 4, &pops_fw_version, modstatus, opt);
-	} else {
-		modid = sceKernelStartModule(modid, argsize, argp, modstatus, opt);
-	}
+	if(mod != NULL) {
+		fix_nid((SceModule*)mod);
 
-	if(0 == strcmp(mod->modname, "scePops_Manager")) {
-		u32 load_module_nid = -1;
+		if(0 == strcmp(mod->modname, "scePops_Manager")) {
+			// patch sceImpose_driver import flags
+			if(pops_fw_version == FW_400) {
+				PspModuleImport *imp;
 
-		// use host nid, because fix_nid already fixed the load_module_nid into host one
-		if(psp_fw_version == FW_635 || psp_fw_version == FW_639) {
-			load_module_nid = 0xFFB9B760;
-		} else if(psp_fw_version == FW_620) {
-			load_module_nid = 0xE3CCC6EA;
-		} else {
-			printk("%s: unknown fw 0x%08X\n", __func__, psp_fw_version);
-			asm("break");
+				imp = find_import_lib((SceModule*)mod, "sceImpose_driver");
+				imp->attribute = 0x0009;
+			}
+		} 
+
+		if(0 == strcmp(mod->modname, "scePaf_Module")) {
+			if(pops_fw_version == FW_400) {
+				char path[128];
+
+				sprintf(path, "%sheaparea2.prx", get_module_prefix());
+				load_start_module(path);
+			}
 		}
 
-		hook_import_bynid((SceModule*)mod, "ModuleMgrForKernel", load_module_nid, _sceKernelLoadModule, 0);
+		if(0 == strcmp(mod->modname, "PROPopcornManager")) {
+			modid = sceKernelStartModule(modid, 4, &pops_fw_version, modstatus, opt);
+		} else {
+			modid = sceKernelStartModule(modid, argsize, argp, modstatus, opt);
+		} 
+
+		if(0 == strcmp(mod->modname, "scePops_Manager")) {
+			u32 load_module_nid = -1;
+
+			// use host nid, because fix_nid already fixed the load_module_nid into host one
+			if(psp_fw_version == FW_635 || psp_fw_version == FW_639) {
+				load_module_nid = 0xFFB9B760;
+			} else if(psp_fw_version == FW_620) {
+				load_module_nid = 0xE3CCC6EA;
+			} else {
+				printk("%s: unknown fw 0x%08X\n", __func__, psp_fw_version);
+				asm("break");
+			}
+
+			hook_import_bynid((SceModule*)mod, "ModuleMgrForKernel", load_module_nid, _sceKernelLoadModule, 0);
+		} 
 	}
 	
 	printk("%s: start module %s -> 0x%08X\n", __func__, redir_path, modid);
@@ -302,11 +365,25 @@ int custom_start_module(int modid, SceSize argsize, void *argp, int *modstatus, 
 	mod = (SceModule2*) sceKernelFindModuleByUID(modid);
 
 	if(0 == strcmp(mod->modname, "sceImpose_Driver")) {
+		PspModuleImport *imp;
+
 		fix_nid((SceModule*)mod);
+
+		// patch sceAudio_driver import flags
+		if(pops_fw_version == FW_400) {
+			imp = find_import_lib((SceModule*)mod, "sceAudio_driver");
+			imp->attribute = 0x0009;
+		}
 	}
 
 	return -1;
 }
+
+static u32 g_sceImposeGetParamOld_NID[] = {
+	0x4B02F047,
+	0x531C9778,
+	0x6F502C0A,
+};
 
 static int popsloader_patch_chain(SceModule2 *mod)
 {
@@ -314,7 +391,8 @@ static int popsloader_patch_chain(SceModule2 *mod)
 
 	if(0 == strcmp(mod->modname, "sceImpose_Driver")) {
 		SceModule2 *mod_;
-		u32 sceImposeGetParam_NID;
+		u32 sceImposeGetParam_NID = -1;
+		int i;
 
 		if(psp_fw_version == FW_620) {
 			sceImposeGetParam_NID = 0xC94AC8E2;
@@ -327,8 +405,9 @@ static int popsloader_patch_chain(SceModule2 *mod)
 		sceImposeGetParamNew = (void*)sctrlHENFindFunction("sceImpose_Driver", "sceImpose_driver", sceImposeGetParam_NID);
 		mod_ = (SceModule2*)sceKernelFindModuleByName("scePops_Manager");
 
-		hook_import_bynid((SceModule*)mod_, "sceImpose_driver", 0x4B02F047, _sceImposeGetParamOld, 0);
-		hook_import_bynid((SceModule*)mod_, "sceImpose_driver", 0x531C9778, _sceImposeGetParamOld, 0);
+		for(i=0; i<NELEMS(g_sceImposeGetParamOld_NID); ++i) {
+			hook_import_bynid((SceModule*)mod_, "sceImpose_driver", g_sceImposeGetParamOld_NID[i], _sceImposeGetParamOld, 0);
+		}
 	}
 
 	if(g_previous)
@@ -368,7 +447,8 @@ int module_start(SceSize args, void* argp)
 
 	psp_fw_version = sceKernelDevkitVersion();
 	psp_model = sceKernelGetModel();
-	printk_init();
+//	printk_init();
+	printk_init("ms0:/core.txt");
 	mount_memory_stick();
 
 	if(-1 == load_config() || g_conf.pops_fw_version == 0) {

@@ -15,6 +15,13 @@ PSP_EXPORT_FUNC(myCtrlPeekBufferPositive)
 PSP_EXPORT_FUNC(myCtrlPeekBufferNegative)
 PSP_EXPORT_FUNC(myCtrlReadBufferPositive)
 PSP_EXPORT_FUNC(myCtrlReadBufferNegative)
+PSP_EXPORT_FUNC(myIoOpen)
+PSP_EXPORT_FUNC(myIoLseek)
+PSP_EXPORT_FUNC(myIoIoctl)
+PSP_EXPORT_FUNC(myIoRead)
+PSP_EXPORT_FUNC(myIoReadAsync)
+PSP_EXPORT_FUNC(myIoGetstat)
+PSP_EXPORT_FUNC(myIoClose)
 PSP_EXPORT_END
 
 PSP_END_EXPORTS
